@@ -1,51 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
 <head>
-    <title>Map</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGIS Rizal Nazari - BMKG Monitor</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --main-color: #00eeff;
+            --bg-color: #081b29;
+            --second-bg-color: #112e42;
+            --text-color: #ededed;
+            --warning-color: #ff4d4d;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .map-wrapper {
+            background: var(--second-bg-color);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 238, 255, 0.1);
+            border: 1px solid rgba(0, 238, 255, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .header-flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 12px;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .info-card {
+            background: var(--second-bg-color);
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 4px solid var(--main-color);
+        }
+
+        .info-card.quake { border-left-color: var(--warning-color); }
+
+        h3 { margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+        p { margin: 5px 0; font-size: 0.9rem; opacity: 0.9; }
+
+        .leaflet-popup-content-wrapper {
+            background: var(--second-bg-color);
+            color: var(--text-color);
+            border: 1px solid var(--main-color);
+        }
+    </style>
 </head>
 <body>
-    <!-- Nav -->
-    <nav>
-        <a href="home.html">Home</a>
-        <a href="about.html">About</a>
-        <a href="map.html">Map</a>
-    </nav>
 
-    <!-- Header -->
-    <header style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-        <h1>Map</h1>
-        <p>Peta Sebaran Fasilitas Persampahan di Indonesia.</p>
-        <hr>
-    </header>
+<div class="container">
+    <div class="map-wrapper">
+        <div class="header-flex">
+            <h2><i class='bx bx-globe'></i> BMKG Real-Time Monitor</h2>
+            <div id="status-api"><i class='bx bx-sync bx-spin'></i> Menghubungkan API...</div>
+        </div>
+        <div id="map"></div>
+    </div>
 
-    <!-- Content -->
-    <main>
-        <section id="map" class="content" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-            <h2>Filter Berdasarkan Provinsi</h2>
-            <ul>
-                <li><a href="#">DKI Jakarta</a></li>
-                <li><a href="#">Jawa Barat</a></li>
-                <li><a href="#">Jawa Tengah</a></li>
-            </ul>
-        </section>
+    <div class="dashboard-grid">
+        <div class="info-card quake" id="quake-card">
+            <h3><i class='bx bx-pulse'></i> Gempa Terkini</h3>
+            <div id="quake-info">Memuat data gempa...</div>
+        </div>
 
-        <section id="location" class="content" style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-            <h2>Lokasi Fasilitas Persampahan</h2>
-            <h2>Peta</h2>
+        <div class="info-card" id="weather-card">
+            <h3><i class='bx bx-cloud-light-rain'></i> Cuaca Pejaten Barat</h3>
+            <div id="weather-info">Memuat ramalan cuaca...</div>
+        </div>
+    </div>
+</div>
 
-            <div>
-                <iframe 
-                    src="https://www.google.com/maps?q=TPA%20Bantar%20Gebang%20Bekasi&z=10&output=embed"
-                    width="100%"
-                    height="500"
-                    style="border:0;"
-                    allowfullscreen=""
-                    loading="lazy">
-                </iframe>
-            </div>
-            <hr>
-            <footer>
-                v.0.0.1 @rizalnazari_ | Copyright 2026
-            </footer>
-        </section>
-    </main>
-</body>
-</html>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // 1. Setup Peta
+    const map = L.map('map').setView([-2.5489, 118.0149], 5);
+    
+    const darkBase = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; CARTO'
+    }).addTo(map);
+
+    // Layer Groups
+    const quakeLayer = L.layerGroup().addTo(map);
+    const weatherLayer = L.layerGroup().addTo(map);
+
+    L.control.layers(null, {
+        "Titik Gempa": quakeLayer,
+        "Lokasi Cuaca": weatherLayer
+    }).addTo(map);
+
+    // 2. Fetch Gempa Terkini
+    async function fetchEarthquake() {
+        try {
+            const res = await fetch('https://bmkg-restapi.vercel.app/v1/earthquake/latest');
+            const { data } = await res.json();
+            
+            const coords = data.coordinates.split(',').map(Number);
+            const lat = coords[0];
+            const lng = coords[1];
+
+            L.circle([lat, lng], {
+                color: 'red',
+                fillColor: '#f03',
+                fillOpacity: 0.5,
+                radius: 50000
+            }).addTo(quakeLayer)
+              .bindPopup(`<b>Gempa Terkini</b><br>Magnitudo: ${data.magnitude}<br>Kedalaman: ${data.depth}<br>${data.area}`);
+
+            document.getElementById('quake-info').innerHTML = `
+                <p><strong>Lokasi:</strong> ${data.area}</p>
+                <p><strong>Magnitudo:</strong> ${data.magnitude} SR</p>
+                <p><strong>Waktu:</strong> ${data.date} | ${data.time}</p>
+                <p style="color: var(--warning-color)"><strong>Potensi:</strong> ${data.potensial}</p>
+            `;
+        } catch (err) { console.error(err); }
+    }
+
+    // 3. Fetch Cuaca Pejaten Barat (Current)
+    async function fetchWeather() {
+        try {
+            const res = await fetch('https://bmkg-rest
